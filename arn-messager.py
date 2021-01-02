@@ -9,12 +9,14 @@ import dns
 import dns.resolver
 import random
 import string
+import re
 
 from nio import AsyncClient, LoginResponse, RoomMessageText, \
     InviteMemberEvent, JoinError, RoomInviteError
 
 
 DEFAULT_CONFIG_PATH = "config.yml"
+DEFAULT_MAUTRIX_BOT = "@whatsappbot"
 
 ###############################################################################
 # Error management
@@ -30,11 +32,11 @@ class ARNMessagerError(Exception):
 ###############################################################################
 TRANSLATIONS = {
     'en_US': {
-        'welcome_message': "Hello, I'm {bot_name}, a robot that relays messages between the {im_bridged} and Matrix/Element instant messaging networks. A Matrix lounge mirror of this group has just been created. Please provide a matrix user ID for the administration of the mirror room, this person will be able to add other matrix user to the room. Only {allowed} accounts are allowed as administrator. Example: @johndoe:{example_instance}",
+        'welcome_message': "Hello, I'm {bot}, a robot that relays messages between the {im_bridged} and Matrix/Element instant messaging networks. A Matrix lounge mirror of this group has just been created. Please provide a matrix user ID for the administration of the mirror room, this person will be able to add other matrix user to the room. Only {allowed} accounts are allowed as administrator. Example: @johndoe:{example_instance}",
         'invited': "{user} has been invited."
     },
     'fr_FR': {
-        'welcome_message': "Bonjour, je suis {bot_name}, un robot qui relaie les messages entre {im_bridged} et le réseau de messagerie instantannée Matrix/Element. Un salon Matrix miroir de ce groupe vient juste d'être créé. Merci d'indiquer l'identifiant matrix de la personne qui administrera ce salon miroir, cette personne pourra ajouter à cette conversation d'autres utilisateurs ou utilisatrices matrix. Seuls les comptes matrix des instances suivantes sont autorisés: {allowed}. Exemple: @johndoe:{example_instance}",
+        'welcome_message': "Bonjour, je suis {bot}, un robot qui relaie les messages entre {im_bridged} et le réseau de messagerie instantannée Matrix/Element. Un salon Matrix miroir de ce groupe vient juste d'être créé. Merci d'indiquer l'identifiant matrix de la personne qui administrera ce salon miroir, cette personne pourra ajouter à cette conversation d'autres utilisateurs ou utilisatrices matrix. Seuls les comptes matrix des instances suivantes sont autorisés: {allowed}. Exemple: @johndoe:{example_instance}",
         'invited': "{user} a été invité."
     }
 }
@@ -76,10 +78,28 @@ class Callbacks(object):
         self.client = client
         self.config = config
 
+    async def send(self, room, message):
+        await self.client.room_send(
+            room.room_id,
+            message_type="m.room.message",
+            content={
+                "msgtype": "m.text",
+                "body": message
+            }
+        )
+
+
     async def invite(self, room, event):
         """Handle an incoming invite event.
         If an invite is received, then join the room specified in the invite.
         """
+        if event.sender not in self.config['allowed_users']:
+            logger.warning(f"{event.sender} has invited the bot, but this users"
+                           " is not autorized to do it.")
+            return
+
+        if event.state_key != self.config['user']:
+            return
 
         # Attempt to join 3 times before giving up
         for attempt in range(3):
@@ -87,90 +107,64 @@ class Callbacks(object):
             if type(result) != JoinError:
                 logger.info(f"Room {room.room_id} joined !")
                 break
-            logger.error(f"Attempt for joining room {room.room_id}"
-                         f"#{attempt}: {result.message}")
+            logger.debug(result)
         else:
             logger.error(f"Unable to join the room {room.room_id}")
 
         # Send the welcome message
-        await self.client.room_send(
-            room.room_id,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": _('welcome_message',
-                          bot=config['bot_name'],
-                          im_bridged=', '.join(config['im_bridged']),
-                          allowed=', '.join(config['allowed']),
-                          example_instance=config['allowed'][0])
-            }
-        )
+        await self.send(room, _('welcome_message',
+                  bot=self.config['bot_name'],
+                  im_bridged=', '.join(self.config['im_bridged']),
+                  allowed=', '.join(self.config['allowed']),
+                  example_instance=self.config['allowed'][0]))
 
     async def message(self, room, event):
         # Ignore messages from ourselves
-        if event.sender == self.client.user:
+        if event.sender not in self.config['allowed_users']:
             return
-        logger.debug("{room.room_id}: {event.body}")
+        logger.debug(f"{room.room_id}#{event.sender}: {event.body}")
         # Remove start and end spaces from message
         msg = event.body.strip()
 
         # Ignore non matrix ID message
         for allowed in self.config['allowed']:
-            if msg.endswith('@' + allowed):
-                break
-            if msg.endswith(':' + allowed):
+            allowed = allowed.replace('.', '\.')
+            regex = re.compile(f"\*[^*]+\*: @?[^ ]+[:@]{allowed} *$")
+            if regex.match(msg):
                 break
         else:
             return
 
+        # Remove the whatsapp username
+        user_id = ':'.join(msg.split(':')[1:]).strip()
+
         # Transform into matrix ID if it's in email format
-        if not msg.startswith('@'):
-            user_id = "@" + msg.replace('@', ':')
+        if not user_id.startswith('@'):
+            user_id = "@" + user_id.replace('@', ':')
+
+        # Deny to invite the bot itself ><
+        if user_id == self.config['user']:
+            return
 
         # Invite the user given
         logger.info(f"Inviting {user_id} into room {room.room_id}")
         result = await self.client.room_invite(room.room_id, user_id)
         if type(result) == RoomInviteError:
             logger.error(f"Unable to invite {user_id} into {room.room_id}: {result.message}")
-            await self.client.room_send(
-                room.room_id,
-                message_type="m.room.message",
-                content={
-                    "msgtype": "m.text",
-                    "body": result.message
-                }
-            )
-            return
-        await self.client.room_send(
-            room.room_id,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": _("invited", user=user_id)
-            }
-        )
+            await self.send(room, result.message)
+            if not result.message.endswith(' is already in the room.'):
+                return
+        else:
+            await self.send(room, _("invited", user=user_id))
 
         # Define the user as admin on the matrix miror
-        logger.error(f"Giving admin priviledge to {user_id} on room {room.room_id}")
-        await self.client.room_send(
-            room.room_id,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": "!wa set-pl " + user_id + " 100"
-            }
-        )
-        await self.client.room_send(
-            room.room_id,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": "!wa reconnect"
-            }
-        )
+        logger.error(f"Giving admin right to {user_id} on room {room.room_id}")
+        await self.send(room, f"!wa set-pl {user_id} 100")
+        await self.send(room, f"!wa reconnect")
 
         # Leave the conversation
         await self.client.room_leave(room.room_id)
+        await self.client.room_forget(room.room_id)
 
 
 ###############################################################################
@@ -209,7 +203,7 @@ def search_matrix_server(user):
     server = user.split(':')[1]
     result = dns.resolver.resolve('_matrix._tcp.' + server, 'SRV')
     if len(result) >= 1:
-        server = result[0].target.to_text()
+        server = result[0].target.to_text()[:-1]
     return server
 
 
@@ -219,7 +213,8 @@ def load_config(config_path, default_config):
         with open(config_path, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
     except FileNotFoundError:
-        logger.info(f"No config file found on path {config_path}. Default configuration will be used.")
+        logger.info(f"No config file found on path {config_path}. "
+                    "Default configuration will be used.")
         pass
     else:
         for key, value in config.items():
@@ -228,29 +223,36 @@ def load_config(config_path, default_config):
     config = default_config
 
     if config['user'] is None:
-        raise ARNMessagerError("You need to register a specific user on a matrix "
-                            "instance and fill the settings 'user' with it or give it in option")
+        raise ARNMessagerError("You need to register a specific user on a "
+                               "matrix instance and fill the settings "
+                               "'user' with it or give it in option")
     elif 'server' not in config:
         config['server'] = "https://" + search_matrix_server(config['user'])
 
     elif not re.match(r'https?://', config['server']):
         config['server'] = "https://" + config['server']
 
+    account_server = config['user'].split(':')[1]
     if 'allowed' not in config:
-        config['allowed'] = [config['user'].split(':')[1]]
+        config['allowed'] = [account_server]
+
+    if 'allowed_users' not in config:
+        config['allowed_users'] = [f"@{DEFAULT_MAUTRIX_BOT}:{account_server}"]
     return config
 
 async def ask_password(client, config, config_path):
-        logger.error("No access token stored.")
+        logger.warning("No access token stored.")
         print(f"Please enter the password of {client.user_id}.")
         while True:
             pw = getpass.getpass()
+            logger.info('Connecting')
             resp = await client.login(pw, device_name=config['device_name'])
+            logger.debug('Connection request received')
             # check that we logged in succesfully
             if isinstance(resp, LoginResponse):
+                logger.info('Connection done')
                 break
-            print(f"server = \"{config['server']}\"; user = \"{client.user_id}\"")
-            print(f"Failed to log in: {resp}")
+            logger.debug(resp)
 
         # Register access token and device id
         config['access_token'] = resp.access_token
@@ -301,7 +303,6 @@ async def main() -> None:
     else:
         client.access_token = access_token
         client.device_id = config['device_id']
-
     # Maintain the connexion
     logger.info("Running the bot")
     await client.sync_forever(timeout=30000, full_state=True)
