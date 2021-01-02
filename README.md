@@ -36,7 +36,7 @@ Here are the option you can use in YAML file:
  * **user**: The matrix user used by the bot. Example: @johndoe:domain.tld
  * **server**: [Optional] The matrix instance on which the bot will login. Example: matrix.sans-nuage.fr. A default value is deduced from the user param.
  * **device_name**: [Optional] The device name used by this bot to log in. Default is generated randomly.
- * **access_token": [Optional] To avoid to be prompted for password the first time, you can give an access_token. You can get it with a curl
+ * **access_token**: [Optional] To avoid to be prompted for password the first time, you can give an access_token. You can get it with a curl
  * **allowed**: [Optional] A list of matrix instances allowed
  * **bot_name**: [Optional] The name of your robot. Default: ARN-messager
  * **im_bridged**: [Optional] A list of social network instant messaging in which this robot could be bridged. Default: Whatsapp
