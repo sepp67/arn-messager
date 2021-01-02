@@ -4,6 +4,8 @@ ARN Messager is a bot to use in addition of mautrix to allow matrix users withou
 
 ## Installation
 
+Create a system user 
+
 Clone the repo
 
 ```
@@ -17,11 +19,12 @@ Create virtual env with dependencies
 python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
+chown -R USER:USER /opt/arn-messager
 ```
 
 Register a user on a matrix instance and connect with it by running:
 ```
-./arn-messager -u @johndoe@domain.tld
+sudo -u USER ./arn-messager -u @johndoe@domain.tld
 ```
 After giving password (not registered), do CTRL + C to stop arn-messager
 
