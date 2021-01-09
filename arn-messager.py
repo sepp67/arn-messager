@@ -227,7 +227,15 @@ def parse_args():
 
 def search_matrix_server(user):
     server = user.split(':')[1]
-    result = dns.resolver.resolve('_matrix._tcp.' + server, 'SRV')
+    try:
+        result = dns.resolver.resolve('_matrix._tcp.' + server, 'SRV')
+    except:
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = ['89.234.141.66'] # External resolver
+        try:
+            result = resolver.resolve('_matrix._tcp.' + server, 'SRV')
+        except:
+            return server
     if len(result) >= 1:
         server = result[0].target.to_text()[:-1]
     return server
