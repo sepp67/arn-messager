@@ -11,12 +11,14 @@ import random
 import string
 import re
 
+from time import sleep
 from nio import AsyncClient, LoginResponse, RoomMessageText, \
     InviteMemberEvent, JoinError, RoomInviteError
 
 
 DEFAULT_CONFIG_PATH = "config.yml"
 DEFAULT_MAUTRIX_BOT = "@whatsappbot"
+DEFAULT_ANSWER_USERS = "@whatsapp_[0-9]+"
 
 ###############################################################################
 # Error management
@@ -93,12 +95,21 @@ class Callbacks(object):
         """Handle an incoming invite event.
         If an invite is received, then join the room specified in the invite.
         """
-        if event.sender not in self.config['allowed_users']:
+        if event.sender not in self.config['can_invite_the_bot']:
             logger.warning(f"{event.sender} has invited the bot, but this users"
                            " is not autorized to do it.")
             return
 
         if event.state_key != self.config['user']:
+            return
+
+        admins = set([user for user, level in room.power_levels.users.items()
+                  if level >= 100])
+        if event.sender not in admins:
+            return
+
+        admins -= set([event.sender, self.config['user']] + self.config['can_invite_the_bot'])
+        if len(admins) > 0:
             return
 
         # Attempt to join 3 times before giving up
@@ -111,32 +122,45 @@ class Callbacks(object):
         else:
             logger.error(f"Unable to join the room {room.room_id}")
 
+        # Reconnect to avoid bug
+        await self.send(room, f"!wa relaybot reconnect")
+        sleep(3)
+
         # Send the welcome message
         await self.send(room, _('welcome_message',
                   bot=self.config['bot_name'],
                   im_bridged=', '.join(self.config['im_bridged']),
-                  allowed=', '.join(self.config['allowed']),
-                  example_instance=self.config['allowed'][0]))
+                  allowed=', '.join(self.config['can_be_invited_by_the_bot']),
+                  example_instance=self.config['can_be_invited_by_the_bot'][0]))
 
     async def message(self, room, event):
         # Ignore messages from ourselves
-        if event.sender not in self.config['allowed_users']:
+        if event.sender == self.config['user']:
             return
-        logger.debug(f"{room.room_id}#{event.sender}: {event.body}")
+
+        # Ignore messages from ourselves
+        for writer in self.config['can_answer_to_the_bot']:
+            regex = re.compile(writer)
+            if regex.match(event.sender):
+                break
+        else:
+            return
+
+        #logger.debug(f"{room.room_id}#{event.sender}: {event.body}")
         # Remove start and end spaces from message
         msg = event.body.strip()
 
         # Ignore non matrix ID message
-        for allowed in self.config['allowed']:
+        for allowed in self.config['can_be_invited_by_the_bot']:
             allowed = allowed.replace('.', '\.')
-            regex = re.compile(f"\*[^*]+\*: @?[^ ]+[:@]{allowed} *$")
+            regex = re.compile(f"@?[^ ]+[:@]{allowed} *$")
             if regex.match(msg):
                 break
         else:
             return
 
         # Remove the whatsapp username
-        user_id = ':'.join(msg.split(':')[1:]).strip()
+        user_id = msg.strip()
 
         # Transform into matrix ID if it's in email format
         if not user_id.startswith('@'):
@@ -148,6 +172,8 @@ class Callbacks(object):
 
         # Invite the user given
         logger.info(f"Inviting {user_id} into room {room.room_id}")
+        await self.send(room, f"!wa relaybot set-pl {self.config['user']} 100")
+        sleep(3)
         result = await self.client.room_invite(room.room_id, user_id)
         if type(result) == RoomInviteError:
             logger.error(f"Unable to invite {user_id} into {room.room_id}: {result.message}")
@@ -159,12 +185,12 @@ class Callbacks(object):
 
         # Define the user as admin on the matrix miror
         logger.error(f"Giving admin right to {user_id} on room {room.room_id}")
-        await self.send(room, f"!wa set-pl {user_id} 100")
-        await self.send(room, f"!wa reconnect")
+        await self.send(room, f"!wa relaybot set-pl {user_id} 100")
+        #await self.send(room, f"!wa relaybot reconnect")
 
         # Leave the conversation
         await self.client.room_leave(room.room_id)
-        await self.client.room_forget(room.room_id)
+        #await self.client.room_forget(room.room_id)
 
 
 ###############################################################################
@@ -233,11 +259,14 @@ def load_config(config_path, default_config):
         config['server'] = "https://" + config['server']
 
     account_server = config['user'].split(':')[1]
-    if 'allowed' not in config:
-        config['allowed'] = [account_server]
+    if 'can_be_invited_by_the_bot' not in config:
+        config['can_be_invited_by_the_bot'] = [account_server]
 
-    if 'allowed_users' not in config:
-        config['allowed_users'] = [f"@{DEFAULT_MAUTRIX_BOT}:{account_server}"]
+    if 'can_invite_the_bot' not in config:
+        config['can_invite_the_bot'] = [f"{DEFAULT_MAUTRIX_BOT}:{account_server}"]
+
+    if 'can_answer_to_the_bot' not in config:
+        config['can_answer_to_the_bot'] = [f"{DEFAULT_ANSWER_USER}:{account_server}"]
     return config
 
 async def ask_password(client, config, config_path):
@@ -303,6 +332,10 @@ async def main() -> None:
     else:
         client.access_token = access_token
         client.device_id = config['device_id']
+
+    # Set display name
+    await client.set_displayname(config['bot_name'])
+
     # Maintain the connexion
     logger.info("Running the bot")
     await client.sync_forever(timeout=30000, full_state=True)

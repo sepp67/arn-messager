@@ -40,8 +40,9 @@ Here are the option you can use in YAML file:
  * **server**: [Optional] The matrix instance on which the bot will login. Example: matrix.sans-nuage.fr. A default value is deduced from the user param.
  * **device_name**: [Optional] The device name used by this bot to log in. Default is generated randomly.
  * **access_token**: [Optional] To avoid to be prompted for password the first time, you can give an access_token. You can get it with a curl
- * **allowed_users**: A list of mautrix bots allowed to invite this bot in a room
- * **allowed**: [Optional] A list of matrix instances allowed
+ * **can_invite_the_bot**: A list of mautrix bots allowed to invite this bot in a room
+ * **can_be_invited_by_the_bot**: [Optional] A list of matrix instances from which users are allowed to be invited
+ * **can_answer_to_the_bot**: [Optional] Typically whatsapp users allowed to speak to the bot
  * **bot_name**: [Optional] The name of your robot. Default: ARN-messager
  * **im_bridged**: [Optional] A list of social network instant messaging in which this robot could be bridged. Default: Whatsapp
  * **welcome_message**: [Optional] A customize welcome message when the bot join on a room on which it has been invited
