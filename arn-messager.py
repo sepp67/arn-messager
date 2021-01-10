@@ -186,7 +186,7 @@ class Callbacks(object):
             await self.send(room, _("invited", user=user_id))
 
         # Define the user as admin on the matrix miror
-        logger.error(f"Giving admin right to {user_id} on room {room.room_id}")
+        logger.info(f"Giving admin right to {user_id} on room {room.room_id}")
         await self.send(room, f"!wa relaybot set-pl {user_id} 100")
         #await self.send(room, f"!wa relaybot reconnect")
 
