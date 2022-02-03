@@ -1,0 +1,33 @@
+# This is an example file that can be auto-generated at first startup -> rename it supervisor_botadmin
+access_token: 50aWZ$
+authorized_admin_commands:
+- '!wa '
+- '!sg '
+bot_name: ARN-Messager
+bridgebot:
+- '@whatsappbot:domain.tld'
+- '@signalbot:domain.tld'
+botpuppets:
+- '@whatsapp_[0-9]+:domain.tld$'
+- '@signal[0-9]+:domain.tld$'
+botusers:
+- domain.tld
+device_id: QBCDGHZRHIU
+device_name: QSDGZETEZ
+domain: domain.tld
+forbidden_admin_commands:
+- '!wa delete-all-portals'
+- '!wa delete-portal'
+- '!wa list rooms'
+- '!sg '
+im_bridged:
+- Whatsapp
+- Signal
+lang: fr_FR
+portal_room_whatsapp:
+- '!dSDTHsdfgfREFFEZss:domain.tld'
+portal_room_signal:
+- '!dSDTHsdfgfREFFEZss:domain.tld'
+server: https://matrix.domain.tld
+supervisor_botadmin: '@arn-messager:domain.tld'
+welcome_message: ask_portal_admin
