@@ -106,17 +106,6 @@ class Callbacks(object):
         if event.state_key != self.config['supervisor_botadmin']:
             return
 
-        admins = set([user for user, level in room.power_levels.users.items()
-                  if level >= 100])
-        #if event.sender not in admins:
-        #    logger.warning(f"{event.sender} is not admin in {room.room_id}")
-        #    return
-
-        admins -= set([event.sender, self.config['supervisor_botadmin']] + self.config['bridgebot'])
-        if len(admins) > 0:
-            logger.warning(f"There are already other admins in {room.room_id}")
-            return
-
         # Attempt to join 3 times before giving up
         for attempt in range(3):
             result = await self.client.join(room.room_id)
