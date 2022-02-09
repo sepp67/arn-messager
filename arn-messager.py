@@ -99,7 +99,7 @@ class Callbacks(object):
         """Handle an incoming invite event.
         If an invite is received, then join the room specified in the invite.
         """
-        if event.sender not in self.config['botusers']:
+        if all([not event.sender.endswith(botuser) for botuser in self.config['botusers']]):
             logger.warning(f"{event.sender} is not an authorized bot user.")
             return
 
