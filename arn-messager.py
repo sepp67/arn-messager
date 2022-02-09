@@ -34,13 +34,13 @@ class ARNMessagerError(Exception):
 ###############################################################################
 TRANSLATIONS = {
     'en_US': {
-        'ask_portal_admin': "Please type a matrix user ID, e.g. @johndoe:{example_instance} . This group will be bridged with Element/Matrix. Type help for details",
+        'ask_portal_admin': "To add your contact, type its matrix user ID, e.g. @johndoe:{example_instance} . Type help for details",
         'ask_im': "Please type IM(s) to create portal, e.g. {im_bridged[0]} OR {im_bridged[1]} OR {im_bridged} . Type help for details",
         'help': "Hello, I'm {bot}, a robot that enables chating between {im_bridged} and Matrix/Element. A Matrix portal room of this {im_bridged} group has just been created. Please provide a matrix user ID for the administration of the mirror room, this person will be able to add other matrix user to the room. Only {allowed} accounts are allowed as administrator. Example: @johndoe:{example_instance}",
         'invited': "{user} has been invited."
     },
     'fr_FR': {
-        'ask_portal_admin': "Pour ajouter votre pote militant.e relou à ce groupe, tapez son identifiant Matrix. Exemple: @libremax:{example_instance} . Tapez help les détails",
+        'ask_portal_admin': "Pour ajouter votre contact à ce groupe, tapez son identifiant Matrix. Exemple: @libremax:{example_instance} . Tapez help pour plus d'info",
         'ask_im': "Tapez les tchats vers lesquels créer un portail, Exemple: {im_bridged[0]} OU {im_bridged[1]} OU {im_bridged} . Tapez help les détails",
         'help': "Bonjour, je suis {bot}, un robot qui permet de chatter entre {im_bridged} et Element/Matrix. Un salon Matrix miroir de ce groupe vient juste d'être créé. Merci d'indiquer l'identifiant matrix de la personne qui administrera ce salon miroir, cette personne pourra ajouter à cette conversation d'autres utilisateurs ou utilisatrices matrix. Seuls les comptes matrix des instances suivantes sont autorisés: {allowed}. Exemple: @libremax:{example_instance}",
         'invited': "{user} a été invité."
