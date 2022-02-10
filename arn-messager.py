@@ -37,7 +37,7 @@ TRANSLATIONS = {
         'ask_portal_admin': "To add your contact, type '!am' followed by its matrix user ID, e.g. !am @johndoe:{example_instance} . Type help for details",
         'ask_im': """List of commands to bridge your room:
         """,
-        'signal_missing_bridge': f"Ce salon n'est pas bridgé avec signal. Demandez à votre contact d'inviter : {bot_number}",
+        'signal_missing_bridge': "Ce salon n'est pas bridgé avec signal. Demandez à votre contact d'inviter : {bot_number}",
         'help': "Hello, I'm {bot}, a robot that enables chating between {im_bridged} and Matrix/Element. A Matrix portal room of this {im_bridged} group has just been created. Please provide a matrix user ID for the administration of the mirror room, this person will be able to add other matrix user to the room. Only {allowed} accounts are allowed as administrator. Example: @johndoe:{example_instance}",
         'invited': "{user} has been invited.",
         'permission_denied': "Only room admins can invite me"
@@ -50,7 +50,7 @@ TRANSLATIONS = {
 - '!am signal' : Get an invite link for signal user
 - '!am byebye signal'  : Unbridge your room from signal 
 """,
-        'signal_missing_bridge': f"Ce salon n'est pas bridgé avec signal. Demandez à votre contact d'inviter : {bot_number}",
+        'signal_missing_bridge': "Ce salon n'est pas bridgé avec signal. Demandez à votre contact d'inviter : {bot_number}",
         'help': "Bonjour, je suis {bot}, un robot qui permet de chatter entre {im_bridged} et Element/Matrix. Un salon Matrix miroir de ce groupe vient juste d'être créé. Merci d'indiquer l'identifiant matrix de la personne qui administrera ce salon miroir, cette personne pourra ajouter à cette conversation d'autres utilisateurs ou utilisatrices matrix. Seuls les comptes matrix des instances suivantes sont autorisés: {allowed}. Exemple: @libremax:{example_instance}",
         'invited': "{user} a été invité.",
         'permission_denied': "Seuls les administrateurs de salon peuvent m'inviter"
@@ -392,7 +392,7 @@ async def main() -> None:
     client.user_id = config['supervisor_botadmin']
 
     # Listen to message and invitation events
-    callbacks = Callbacks(client, config)
+    callbacks = Callbacks(client, config, config_path)
     client.add_event_callback(callbacks.message, (RoomMessageText,))
     client.add_event_callback(callbacks.invite, (InviteMemberEvent,))
 
