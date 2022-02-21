@@ -46,6 +46,7 @@ TRANSLATIONS = {
         'ask_portal_admin': "Pour ajouter votre contact à ce groupe, tapez '!am' suivi de son identifiant Matrix. Exemple: !am @libremax:{example_instance} . Tapez help pour plus d'info",
         'ask_im': """Liste des commandes pour bridger votre salon:
 - '!am whatsapp' : Get an invite link for whatsapp user
+- '!am whatsapp +33xxxxxxxx' : Invite a whatsapp user
 - '!am byebye whatsapp' : Unbridge your room from whatsapp
 - '!am signal' : Get an invite link for signal user
 - '!am byebye signal'  : Unbridge your room from signal 
@@ -149,7 +150,11 @@ class Callbacks(object):
         else:
             admins = set([user for user, level in room.power_levels.users.items()
                   if level >= 100])
-            if event.sender in admins:
+            bots = [self.config['supervisor_botadmin'], self.config['whatsapp']['bot'], self.config['signal']['bot'], '@mautrix_admin:sans-nuage.fr']
+            users_sansnuage = [user for user in room.users.keys() 
+                    if user.endswith(":sans-nuage.fr") and not (re.match(re.compile(self.config['whatsapp']['puppet']), user) or re.match(re.compile(self.config['signal']['puppet']), user) or user in bots)]
+            ## if event.sender in admins:
+            if event.sender.endswith(":sans-nuage.fr") and len(users_sansnuage) == 1:
                 # Define the user as admin in the matrix portal
                 logger.info(f"Ask for {event.sender} on which IM we need to bridge the room {room.room_id}")
                 # Ask desired bridging
@@ -157,7 +162,8 @@ class Callbacks(object):
             else:
                 logger.info(f"{event.sender} has no admin right so we leave the room {room.room_id}")
 
-                await self.send(room, _('permission_denied'))
+                ## await self.send(room, _('permission_denied'))
+                await self.send(room, "Seul l'admin du salon est autorisée à lancer des commandes pour bridger le salon, lorsqu'il n'y a pas d'autres membres @sans-nuage.fr")
                 # Leave the conversation
                 await self.client.room_leave(room.room_id)
                 await self.client.room_forget(room.room_id)
@@ -172,43 +178,61 @@ class Callbacks(object):
         admins = set([user for user, level in room.power_levels.users.items()
                   if level >= 100])
 
+        bots = [self.config['supervisor_botadmin'], self.config['whatsapp']['bot'], self.config['signal']['bot'], '@mautrix_admin:sans-nuage.fr']
+        users_sansnuage = [user for user in room.users.keys() 
+                if user.endswith(":sans-nuage.fr") and not (re.match(re.compile(self.config['whatsapp']['puppet']), user) or re.match(re.compile(self.config['signal']['puppet']), user) or user in bots)]
+
+        allowed = event.sender.endswith(":sans-nuage.fr") and len(users_sansnuage) == 1
         if any([event.sender.endswith(botuser) for botuser in self.config['botusers']]):
 
-            if msg == "!am whatsapp":
+            if msg == "!am whatsapp" and allowed:
                 logger.info(f"Start to bridge {room.room_id} with whatsapp")
 
                 # Invite the mautrix_whatsapp bot
                 result = await self.client.room_invite(room.room_id, self.config['whatsapp']['bot'])
+                sleep(3)
                 if type(result) == RoomInviteError:
                     logger.error(f"Unable to invite {self.config['whatsapp']['bot']} into {room.room_id}: {result.message}")
                     await self.send(room, result.message)
+                    sleep(3)
                 cmd_prefix = self.config['whatsapp']['command_prefix']
                 await self.send(room, f"{cmd_prefix} create")
+                sleep(3)
                 await self.send(room, f"{cmd_prefix} set-relay")
+                sleep(5)
                 await self.send(room, f"{cmd_prefix} invite-link")
+                return
 
-            elif msg == "!am byebye whatsapp":
+            elif msg == "!am byebye whatsapp" and allowed:
                 cmd_prefix = self.config['whatsapp']['command_prefix']
                 await self.send(room, f"{cmd_prefix} delete-portal")
+                return
 
-            elif msg == "!am signal":
+            elif msg == "!am signal" and allowed:
                 cmd_prefix = self.config['signal']['command_prefix']
                 if self.config['signal']['bot'] in admins:
                     await self.send(room, f"{cmd_prefix} invite-link")
                 else:
                     await self.send(room, _("signal_missing_bridge", bot_number=self.config['bot_number']))
+                return
 
-            elif msg == "!am byebye signal":
+            elif msg == "!am byebye signal" and allowed:
                 cmd_prefix = self.config['signal']['command_prefix']
                 await self.send(room, f"{cmd_prefix} unbridge")
+                return
 
-            elif msg.startswith("!am whatsapp "):
-                await self.send(room, f"not implemented")
+            elif msg.startswith("!am whatsapp +") and allowed:
+                cmd_prefix = self.config['whatsapp']['command_prefix']
+                phone = msg.replace("!am whatsapp +", "")
+                await self.send(room, f"{cmd_prefix} pm +" + phone)
+                sleep(3)
+                result = await self.client.room_invite(room.room_id, self.config['whatsapp']['puppet_prefix'] + phone + ":" + self.config['domain'])
+                return
 
             elif event.sender in self.config['admins'] and (msg.startswith("!wa ") or msg.startswith("!sg ")):
                 await self.send(room, msg)
 
-            return
+                return
 
 
         #logger.debug(f"{room.room_id}#{event.sender}: {event.body}")
@@ -224,7 +248,7 @@ class Callbacks(object):
             return
 
         # Remove the whatsapp username
-        user_id = msg[4:].strip()
+        user_id = msg.replace("!am ", "").strip()
 
         # Transform into matrix ID if it's in email format
         if not user_id.startswith('@'):
@@ -407,7 +431,7 @@ async def main() -> None:
 
     # Set display name
     await client.set_displayname(config['bot_name'])
-
+    
     # Maintain the connexion
     logger.info("Running the bot")
     await client.sync_forever(timeout=30000, full_state=True)
