@@ -266,7 +266,8 @@ class Callbacks(object):
         result = await self.client.room_invite(room.room_id, user_id)
         if type(result) == RoomInviteError:
             logger.error(f"Unable to invite {user_id} into {room.room_id}: {result.message}")
-            await self.send(room, result.message)
+            # We add !wa in front of the error message to avoid getting it bridged to whatsapp
+            await self.send(room, f"!wa result.message")
             #if not result.message.endswith(' is already in the room.'):
             #    return
         else:
