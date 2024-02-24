@@ -289,6 +289,7 @@ class Callbacks(object):
             cmd_prefix = self.config['whatsapp']['command_prefix']
             # We add !wa in front of the error message to avoid getting it bridged to whatsapp
             await self.send(room, f"{cmd_prefix} {result.message}")
+            #if not result.message.endswith(' is already in the room.'):
             #    return
         else:
             await self.send(room, _("invited", user=user_id))
