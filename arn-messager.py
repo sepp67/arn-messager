@@ -36,23 +36,28 @@ TRANSLATIONS = {
     'en_US': {
         'ask_portal_admin': "To add your contact, type '!am' followed by its matrix user ID, e.g. !am @johndoe:{example_instance} . Type help for details",
         'ask_im': """List of commands to bridge your room:
-        """,
-        'signal_missing_bridge': "Ce salon n'est pas bridgé avec signal. Demandez à votre contact d'inviter : {bot_number}",
-        'help': "Hello, I'm {bot}, a robot that enables chating between {im_bridged} and Matrix/Element. A Matrix portal room of this {im_bridged} group has just been created. Please provide a matrix user ID for the administration of the mirror room, this person will be able to add other matrix user to the room. Only {allowed} accounts are allowed as administrator. Example: @johndoe:{example_instance}",
+- '!am whatsapp' : Get the invite link of the whatsapp group
+- '!am ciao whatsapp' : Unbridge your room from whatsapp and delete the portal
+- '!am signal' : Get the invite link of the Signal group
+- '!am ciao signal' : Unbridge your room from signal and delete the portal
+- '!am unbridge signal' : Unbridge your room from signal
+""",
+        'signal_missing_bridge': "An existing room cannot be bridged with Signal. In an existing Signal room, invite: {bot_number}",
+        'help': "Hello, I'm {bot}, a robot that enables chating between {im_bridged} and Element/Matrix. A Matrix portal room of this {im_bridged} group has just been created. Please provide a matrix user ID for the administration of the portal room, this person can then add other matrix users. Only {allowed} accounts are allowed as administrator. Example: @johndoe:{example_instance}",
         'invited': "{user} has been invited.",
         'permission_denied': "Only room admins can invite me"
     },
     'fr_FR': {
         'ask_portal_admin': "Pour ajouter votre contact à ce groupe, tapez '!am' suivi de son identifiant Matrix. Exemple: !am @libremax:{example_instance} . Tapez help pour plus d'info",
-        'ask_im': """Liste des commandes pour bridger votre salon:
-- '!am whatsapp' : Get an invite link for whatsapp user
-- '!am whatsapp +33xxxxxxxx' : Invite a whatsapp user
-- '!am byebye whatsapp' : Unbridge your room from whatsapp
-- '!am signal' : Get an invite link for signal user
-- '!am byebye signal'  : Unbridge your room from signal 
+        'ask_im': """Liste des commandes pour relayer votre salon:
+- '!am whatsapp' : Obtenir un lien d'invitation au groupe WhatsApp
+- '!am ciao whatsapp' :  Ne plus relayer le salon vers WhatsApp et effacer le salon
+- '!am signal' : Obtenir un lien d'invitation au groupe Signal
+- '!am ciao signal'  : Ne plus relayer le salon vers Signal et effacer le salon
+- '!am unbridge signal' : Ne plus relayer le salon vers Signal
 """,
-        'signal_missing_bridge': "Ce salon n'est pas bridgé avec signal. Demandez à votre contact d'inviter : {bot_number}",
-        'help': "Bonjour, je suis {bot}, un robot qui permet de chatter entre {im_bridged} et Element/Matrix. Un salon Matrix miroir de ce groupe vient juste d'être créé. Merci d'indiquer l'identifiant matrix de la personne qui administrera ce salon miroir, cette personne pourra ajouter à cette conversation d'autres utilisateurs ou utilisatrices matrix. Seuls les comptes matrix des instances suivantes sont autorisés: {allowed}. Exemple: @libremax:{example_instance}",
+        'signal_missing_bridge': "Un salon existant ne peut être bridgé avec Signal. Dans un groupe Signal existant, invitez : {bot_number}",
+        'help': "Bonjour, je suis {bot}, un robot qui permet de chatter entre {im_bridged} et Element/Matrix. Un salon Matrix est maintenant relayé à ce groupe. Merci d'indiquer l'identifiant Matrix de la personne qui administrera ce salon-portail, et pourra y ajouter des comptes Matrix. Seuls les comptes Matrix des instances suivantes sont autorisés: {allowed}. Exemple: @libremax:{example_instance}",
         'invited': "{user} a été invité.",
         'permission_denied': "Seuls les administrateurs de salon peuvent m'inviter"
     }
@@ -132,7 +137,7 @@ class Callbacks(object):
         await self.send(room, f"!wa reconnect")
         sleep(3)
 
-        # 1st approach: the logged in IM account is added to a group
+        # 1st approach: the logged in IM account/phone number is added to an IM group
         # bridgebot creates a portal room and invites the logged in Matrix account
         if event.sender in [self.config['whatsapp']['bot'],self.config['signal']['bot']]:
             if event.sender == self.config['whatsapp']['bot']:
@@ -140,7 +145,7 @@ class Callbacks(object):
             else:
                 await self.send(room, f"{self.config['signal']['command_prefix']} set-relay")
 
-        
+
             logger.info(f"{event.sender} set relaybot bridging mode in room {room.room_id}")
             # Send the welcome message for IM-side initialization
             await self.send(room, _('ask_portal_admin',
@@ -163,8 +168,9 @@ class Callbacks(object):
                 logger.info(f"{event.sender} has no admin right so we leave the room {room.room_id}")
 
                 ## await self.send(room, _('permission_denied'))
-                await self.send(room, "Seul l'admin du salon est autorisée à lancer des commandes pour bridger le salon, lorsqu'il n'y a pas d'autres membres @sans-nuage.fr")
+                await self.send(room, "Seul l'admin du salon est autorisé.e à lancer des commandes pour bridger le salon, lorsqu'il n'y a pas d'autres membres @sans-nuage.fr")
                 # Leave the conversation
+                sleep(3)
                 await self.client.room_leave(room.room_id)
                 await self.client.room_forget(room.room_id)
 
@@ -173,39 +179,52 @@ class Callbacks(object):
         # Ignore messages from ourselves
         if event.sender == self.config['supervisor_botadmin']:
             return
-            
+
         msg = event.body.strip()
         admins = set([user for user, level in room.power_levels.users.items()
                   if level >= 100])
 
         bots = [self.config['supervisor_botadmin'], self.config['whatsapp']['bot'], self.config['signal']['bot'], '@mautrix_admin:sans-nuage.fr']
-        users_sansnuage = [user for user in room.users.keys() 
+        users_sansnuage = [user for user in room.users.keys()
                 if user.endswith(":sans-nuage.fr") and not (re.match(re.compile(self.config['whatsapp']['puppet']), user) or re.match(re.compile(self.config['signal']['puppet']), user) or user in bots)]
 
         allowed = event.sender.endswith(":sans-nuage.fr") and len(users_sansnuage) == 1
         if any([event.sender.endswith(botuser) for botuser in self.config['botusers']]):
 
-            if msg == "!am whatsapp" and allowed:
+            if msg == "!am reset":
+                cmd_prefix = self.config['whatsapp']['command_prefix']
+                await self.send(room, f"{cmd_prefix} set-relay")
+#                await self.client.room_leave(room.room_id)
+#                await self.client.room_forget(room.room_id)
+                return
+
+            elif msg == "!am whatsapp" and allowed:
                 logger.info(f"Start to bridge {room.room_id} with whatsapp")
 
                 # Invite the mautrix_whatsapp bot
                 result = await self.client.room_invite(room.room_id, self.config['whatsapp']['bot'])
                 sleep(3)
+                cmd_prefix = self.config['whatsapp']['command_prefix']
                 if type(result) == RoomInviteError:
                     logger.error(f"Unable to invite {self.config['whatsapp']['bot']} into {room.room_id}: {result.message}")
-                    await self.send(room, result.message)
+                    # We add !wa in front of the error message to avoid getting it bridged to whatsapp
+                    await self.send(room, f"{cmd_prefix} {result.message}")
                     sleep(3)
-                cmd_prefix = self.config['whatsapp']['command_prefix']
                 await self.send(room, f"{cmd_prefix} create")
                 sleep(3)
                 await self.send(room, f"{cmd_prefix} set-relay")
-                sleep(5)
+                sleep(7)
                 await self.send(room, f"{cmd_prefix} invite-link")
                 return
 
-            elif msg == "!am byebye whatsapp" and allowed:
+            elif msg == "!am ciao whatsapp" and allowed:
                 cmd_prefix = self.config['whatsapp']['command_prefix']
                 await self.send(room, f"{cmd_prefix} delete-portal")
+                return
+
+            elif msg == "!am ping whatsapp" and allowed:
+                cmd_prefix = self.config['whatsapp']['command_prefix']
+                await self.send(room, f"{cmd_prefix} ping")
                 return
 
             elif msg == "!am signal" and allowed:
@@ -216,22 +235,23 @@ class Callbacks(object):
                     await self.send(room, _("signal_missing_bridge", bot_number=self.config['bot_number']))
                 return
 
-            elif msg == "!am byebye signal" and allowed:
+            elif msg == "!am unbridge signal" and allowed:
                 cmd_prefix = self.config['signal']['command_prefix']
                 await self.send(room, f"{cmd_prefix} unbridge")
                 return
 
-            elif msg.startswith("!am whatsapp +") and allowed:
-                cmd_prefix = self.config['whatsapp']['command_prefix']
-                phone = msg.replace("!am whatsapp +", "")
-                await self.send(room, f"{cmd_prefix} pm +" + phone)
-                sleep(3)
-                result = await self.client.room_invite(room.room_id, self.config['whatsapp']['puppet_prefix'] + phone + ":" + self.config['domain'])
+            elif msg == "!am ciao signal" and allowed:
+                cmd_prefix = self.config['signal']['command_prefix']
+                await self.send(room, f"{cmd_prefix} delete-portal")
+                return
+
+            elif msg == "!am sync signal" and allowed:
+                cmd_prefix = self.config['signal']['command_prefix']
+                await self.send(room, f"{cmd_prefix} sync")
                 return
 
             elif event.sender in self.config['admins'] and (msg.startswith("!wa ") or msg.startswith("!sg ")):
                 await self.send(room, msg)
-
                 return
 
 
@@ -266,8 +286,9 @@ class Callbacks(object):
         result = await self.client.room_invite(room.room_id, user_id)
         if type(result) == RoomInviteError:
             logger.error(f"Unable to invite {user_id} into {room.room_id}: {result.message}")
-            await self.send(room, result.message)
-            #if not result.message.endswith(' is already in the room.'):
+            cmd_prefix = self.config['whatsapp']['command_prefix']
+            # We add !wa in front of the error message to avoid getting it bridged to whatsapp
+            await self.send(room, f"{cmd_prefix} {result.message}")
             #    return
         else:
             await self.send(room, _("invited", user=user_id))
@@ -275,6 +296,7 @@ class Callbacks(object):
             # Define the user as admin in the matrix portal
             logger.info(f"Giving admin right to {user_id} on room {room.room_id}")
             await self.send(room, f"!wa set-pl {user_id} 100")
+            await self.send(room, f"!sg set-pl {user_id} 100")
             #await self.send(room, f"!wa reconnect")
 
 
