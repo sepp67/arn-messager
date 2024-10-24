@@ -281,8 +281,8 @@ class Callbacks(object):
         # Invite the user given
         logger.info(f"Inviting {user_id} into room {room.room_id}")
         # Not required because the supervisor is now botadmin
-        # await self.send(room, f"!wa set-pl {self.config['supervisor_botadmin']} 100")
-        # sleep(3)
+        await self.send(room, f"!wa set-pl {self.config['supervisor_botadmin']} 100")
+        sleep(3)
         result = await self.client.room_invite(room.room_id, user_id)
         if type(result) == RoomInviteError:
             logger.error(f"Unable to invite {user_id} into {room.room_id}: {result.message}")
