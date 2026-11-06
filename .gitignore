@@ -1,3 +1,13 @@
+# Environnements virtuels
 venv/
-*.yml
+.venv/
+
+# Python
+__pycache__/
 *.pyc
+.pytest_cache/
+
+# Configurations locales (contiennent des secrets) :
+# chemin par défaut du script historique et fichiers USER_SERVER.yml dérivés de -u
+/config.yml
+/*_*.yml

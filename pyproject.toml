@@ -1,0 +1,25 @@
+[project]
+name = "arn-messager"
+version = "0.0.0"
+description = "Bot Matrix d'administration des salons-portails des bridges Mautrix"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+# Dépendances d'exécution inchangées : elles restent dans requirements.txt
+# jusqu'à E4.
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config"]
+markers = [
+    "legacy_defect: comportement historique défectueux, caractérisé tel quel et inversé par le commit qui le corrige",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
